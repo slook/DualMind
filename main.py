@@ -29,13 +29,10 @@ def main():
     model_2 = os.getenv("MODEL_2")
     system_prompt_1 = load_system_prompt("system_prompt_1.txt")
     system_prompt_2 = load_system_prompt("system_prompt_2.txt")
-    initial_prompt = os.getenv(
-        "INITIAL_PROMPT",
-        "Let's discuss the future of AI. What are your thoughts on its potential impact on society?",
-    )
+    initial_prompt = os.getenv("INITIAL_PROMPT", "")
     max_tokens = int(os.getenv("MAX_TOKENS", 4000))
     print(f"Max tokens: {max_tokens}")
-    limit_tokens = os.getenv("LIMIT_TOKENS", True)
+    limit_tokens = os.getenv("LIMIT_TOKENS", "true")
     limit_tokens = limit_tokens.lower() == "true"
     print(f"Limit tokens: {limit_tokens}")
     # Load options from JSON file
@@ -59,8 +56,9 @@ def main():
 
 def run_cli(conversation, initial_prompt, options):
     """Run the conversation in command-line interface mode."""
-    load_dotenv()
+
     conversation.start_conversation(initial_prompt, num_exchanges=0, options=options)
+    conversation.save_conversation_log()
 
 
 if __name__ == "__main__":

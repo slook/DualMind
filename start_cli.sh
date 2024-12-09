@@ -1,2 +1,2 @@
 #!/bin/bash
-python main.py --cli
+python3 ./main.py --cli
