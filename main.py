@@ -10,12 +10,12 @@ def load_system_prompt(filename):
         return file.read().strip()
 
 
-def load_options_from_json(filename, max_tokens, limit_tokens):
+def load_options_from_json(filename="options.json"):
     """Load options from a JSON file."""
     with open(filename, "r") as file:
         options = json.load(file)
-        if limit_tokens:
-            options["num_ctx"] = max_tokens
+        #if limit_tokens:
+        #    options["num_ctx"] = max_tokens
         return options
 
 
@@ -36,7 +36,7 @@ def main():
     limit_tokens = limit_tokens.lower() == "true"
     print(f"Limit tokens: {limit_tokens}")
     # Load options from JSON file
-    options = load_options_from_json("options.json", max_tokens, limit_tokens)
+    options = load_options_from_json()
     print(f"Options: {options}")
 
     # Initialize the AI conversation object
