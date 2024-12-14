@@ -9,5 +9,5 @@
     "num_gpu": 0,
     "vocab_only": true,
     "penalize_newline": true,
-    "stop": [":\n", "\n", "{{end_conversation}}"]
+    "stop": ["\n"]
 }

@@ -1,34 +1,49 @@
 import ollama
+import json
 from termcolor import colored
 import datetime
 import tiktoken  # Used for token counting
 
 COLOR = {0: "yellow", 1: "cyan", 2: "green"}
 
-class AIConversation:
-    def __init__(
-        self,
-        model_1,
-        model_2,
-        system_prompt_1,
-        system_prompt_2,
-        ollama_endpoint,
-        max_tokens=4000,
-        limit_tokens=True
-    ):
-        # Initialize conversation parameters and Ollama client
-        self.models = {1: model_1, 2: model_2}
-        self.messages = {
-            #0: [],
-            1: [{"role": "system", "content": system_prompt_1}],
-            2: [{"role": "system", "content": system_prompt_2}]
-        }
-        self.client = ollama.Client(ollama_endpoint)
-        self.ollama_endpoint = ollama_endpoint
-        self.tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo")
-        self.max_tokens = max_tokens
-        self.limit_tokens = limit_tokens
 
+class Loader:
+
+    @staticmethod
+    def get_options(filename="options.json"):
+        """Load options from a JSON file."""
+        with open(filename, "r") as file:
+            options = json.load(file)
+        return options
+
+    @staticmethod
+    def get_system_prompt(active_ai, old_system_prompt):
+        """Load the system prompt from a text file."""
+
+        with open(f"system_prompt_{active_ai}.txt", "r") as file:
+            new_system_prompt = file.read().strip(" \n")
+
+        if new_system_prompt != old_system_prompt:
+            print(colored(f"[SYSTEM] AI {active_ai} system prompt updated: "
+                          f"{new_system_prompt.count(' ')} words.", "magenta"))
+
+        return {"role": "system", "content": new_system_prompt}
+
+loader = Loader()
+   
+
+class AIConversation:
+
+    def __init__(self, models, ollama_endpoint, max_tokens):
+
+        self.models = models
+        self.ollama_endpoint = ollama_endpoint
+        self.max_tokens = max_tokens
+
+        self.client = ollama.Client(ollama_endpoint)
+        self.tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo")
+
+        self.messages = {1: [], 2: []}
         self.conversation_log = []
 
     def count_tokens(self, messages):
@@ -41,40 +56,41 @@ class AIConversation:
         token_count = self.count_tokens(messages)
 
         # Remove pairs of messages from the beginning until we're under the token limit
-        while self.limit_tokens and len(messages) > 3 and token_count > self.max_tokens:
+        while self.max_tokens and len(messages) > 3 and token_count > self.max_tokens:
             print(colored(
                 f"[SYSTEM] Removed oldest {messages[2]['role']} [{messages[2]['content'][:10]}...]"
-                f" and {messages[3]['role']} [{messages[3]['content'][:10]}...] messages.", "magenta"
+                f" & {messages[3]['role']} [{messages[3]['content'][:10]}...] exchange.", "magenta"
             ))
             # Avoid trimming system prompt [0], and initial message [1]
             del messages[3]
             del messages[2]
             token_count = self.count_tokens(messages)
 
-        print(colored(f"[SYSTEM] Context: {token_count} tokens in {len(messages)} messages.", "magenta"))
+        print(colored(f"[SYSTEM] AI {active_ai} context: {token_count} tokens in {len(messages)} messages.", "magenta"))
 
-    def start_conversation(self, initial_message, num_exchanges=0, options=None):
-        
+    def start_conversation(self, initial_message):
+
         response_content = None
         interrupt = True  # Prompt for user message if needed
         active_ai = 0
         i = 1
 
         # Main conversation loop
-        while num_exchanges == 0 or i < num_exchanges:
+        while True:
             try:
                 if interrupt:
                     print(colored(f"\nPress CTRL+C to interrupt the conversation.", "red"))
 
                     if not response_content:
-                        model_name = (f"#{i} {'Interruption' if active_ai else 'Initial message'} "
-                                      f"({'ENV' if initial_message and not active_ai else 'USER'}): ")
+                        model_name = "Interruption " if active_ai else "Initial message "
 
-                        if initial_message and not active_ai:
-                            print(colored(model_name + initial_message, COLOR[active_ai]))
+                        if not active_ai and initial_message:
+                            model_name += "(ENV)"
+                            print(f"#{i} {colored(model_name, COLOR[active_ai])}: {initial_message}")
                             response_content = initial_message
                         else:
-                            response_content = input(colored(model_name, COLOR[active_ai]))
+                            model_name += "(USER)"
+                            response_content = input(f"#{i} {colored(model_name, COLOR[active_ai])}: ")
 
                     if not active_ai:
                         active_ai = len(self.models)
@@ -92,11 +108,14 @@ class AIConversation:
                 active_ai = (active_ai + 1) if active_ai < len(self.models) else 1
 
                 self.messages[active_ai].append({"role": "user", "content": response_content})
+                self.messages[active_ai][0] = loader.get_system_prompt(active_ai,
+                                                                       self.messages[active_ai][0].get("content", ""))
                 self.trim_messages(active_ai)  # and print token count
 
                 i += 1
-                model_name = f"#{i} {self.models[active_ai].upper()} (AI {active_ai}): "
-                options["seed"] = i
+                options = loader.get_options()
+                options["seed"] = i  # Reproducable outputs
+                model_name = f"{self.models[active_ai].upper()} (AI {active_ai})"
                 response_content = ""
 
                 # Generate AI response
@@ -110,11 +129,11 @@ class AIConversation:
                 # Print AI response while it streams
                 for t, chunk in enumerate(stream):
                     if chunk["done"]:
-                        print(colored(f"[+{t} tokens]", "magenta"))
+                        print(colored(f"[+{t}]", "magenta"))
                         break
 
                     if not t:
-                        print(f"\n{colored(model_name, COLOR[active_ai])}", end='', flush=True)
+                        print(f"\n#{i} {colored(model_name, COLOR[active_ai])}: ", end='', flush=True)
 
                     print(colored(chunk["message"]["content"], COLOR[active_ai]), end='', flush=True)
                     response_content += chunk["message"]["content"]
